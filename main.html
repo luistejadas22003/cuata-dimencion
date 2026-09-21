@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Teseracto 4D & Recuerdos Eternos 🌻</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Three.js & Postprocessing Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+
+    <style>
+        :root {
+            --gold-light: #fff8e1;
+            --gold-primary: #ffd54f;
+            --amber-soft: #ffb300;
+            --deep-space: #030202;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--deep-space);
+            font-family: 'Montserrat', sans-serif;
+            color: #ffffff;
+        }
+
+        .cinzel {
+            font-family: 'Cinzel', serif;
+        }
+
+        #webgl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .cinematic-vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle at center, transparent 30%, rgba(10, 6, 2, 0.6) 70%, rgba(2, 1, 0, 0.98) 100%);
+            z-index: 2;
+        }
+
+        .glass-panel {
+            background: rgba(14, 10, 6, 0.65);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 213, 79, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+        }
+
+        #warp-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            background: radial-gradient(circle, transparent 20%, rgba(255, 213, 79, 0.08) 70%, rgba(255, 179, 0, 0.22) 100%);
+        }
+
+        #memory-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #memory-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .faded-media-container {
+            position: relative;
+            max-width: 90vw;
+            max-height: 85vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 45%, rgba(0,0,0,0.8) 65%, rgba(0,0,0,0) 98%);
+            mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 45%, rgba(0,0,0,0.8) 65%, rgba(0,0,0,0) 98%);
+            filter: drop-shadow(0 0 35px rgba(255, 213, 79, 0.3));
+            transition: transform 0.8s ease-out;
+            transform: scale(0.92);
+        }
+
+        #memory-overlay.active .faded-media-container {
+            transform: scale(1.03);
+        }
+
+        .faded-media {
+            width: 100%;
+            height: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body class="relative w-full h-full bg-black">
+
+    <canvas id="webgl-canvas"></canvas>
+    <div class="cinematic-vignette"></div>
+    <div id="warp-overlay"></div>
+
+    <!-- Encabezado HUD Superior -->
+    <header class="absolute top-0 left-0 right-0 p-4 sm:p-6 z-20 flex justify-between items-center pointer-events-none">
+        <div class="pointer-events-auto">
+            <h1 class="cinzel text-base sm:text-2xl font-bold tracking-widest text-amber-200/90 drop-shadow-[0_0_10px_rgba(255,213,79,0.4)]">
+                TESERACTO 4D <span class="text-xs sm:text-sm text-yellow-100/70 font-light block sm:inline tracking-normal font-sans">| Dimensión de Recuerdos</span>
+            </h1>
+        </div>
+
+        <div class="pointer-events-auto flex items-center gap-2 sm:gap-3">
+            <button id="audio-btn" class="glass-panel px-3 py-2 sm:px-4 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium text-amber-200 hover:text-white hover:border-amber-400 transition-all duration-300 flex items-center gap-2">
+                <svg id="sound-off-icon" class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path></svg>
+                <svg id="sound-on-icon" class="w-4 h-4 text-amber-300 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                <span id="audio-text" class="hidden sm:inline">Música de Fondo</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Visor de Medios Flotante Desvanecido -->
+    <div id="memory-overlay">
+        <div class="faded-media-container">
+            <img id="memory-image" src="" alt="Recuerdo" class="faded-media">
+        </div>
+    </div>
+
+    <script>
+        /* =====================================================================
+           RUTAS LOCALES DE IMÁGENES
+           ===================================================================== */
+        const RAW_IMAGES = [
+            'img/001.jpg',
+            'img/002.jpg',
+            'img/003.jpg',
+            'img/004.jpg',
+            'img/005.jpg',
+            'img/006.jpg',
+            'img/007.jpg',
+            'img/008.jpg',
+            'img/009.jpg',
+            
+        ];
+
+        /* =====================================================================
+           GESTIÓN DE HISTORIAL DE IMÁGENES SIN REPETIR
+           ===================================================================== */
+        let imageQueue = [];
+
+        function shuffleArray(arr) {
+            const shuffled = [...arr];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        function getNextImage() {
+            if (imageQueue.length === 0) {
+                imageQueue = shuffleArray(RAW_IMAGES);
+            }
+            return imageQueue.pop();
+        }
+
+        /* =====================================================================
+           MÚSICA ATMOSFÉRICA AUTOMÁTICA
+           ===================================================================== */
+        let audioCtx = null;
+        let isAudioPlaying = false;
+        let mainGainNode = null;
+
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            mainGainNode = audioCtx.createGain();
+            mainGainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            mainGainNode.connect(audioCtx.destination);
+
+            const freqs = [110.00, 164.81, 220.00, 261.63, 329.63, 392.00, 440.00];
+            freqs.forEach((freq, idx) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+                const lfo = audioCtx.createOscillator();
+                const lfoGain = audioCtx.createGain();
+                lfo.frequency.setValueAtTime(0.06 + idx * 0.012, audioCtx.currentTime);
+                lfoGain.gain.setValueAtTime(0.012, audioCtx.currentTime);
+                lfo.connect(gain.gain);
+                lfo.start();
+
+                gain.gain.setValueAtTime(0.03 / freqs.length, audioCtx.currentTime);
+                osc.connect(gain);
+                gain.connect(mainGainNode);
+                osc.start();
+            });
+        }
+
+        function startAudioAutomatically() {
+            if (isAudioPlaying) return;
+
+            initAudio();
+
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            if (mainGainNode) {
+                mainGainNode.gain.setTargetAtTime(0.20, audioCtx.currentTime, 0.8);
+            }
+            isAudioPlaying = true;
+
+            const soundOff = document.getElementById('sound-off-icon');
+            const soundOn = document.getElementById('sound-on-icon');
+            if (soundOff && soundOn) {
+                soundOff.classList.add('hidden');
+                soundOn.classList.remove('hidden');
+            }
+
+            window.removeEventListener('touchstart', startAudioAutomatically);
+            window.removeEventListener('pointerdown', startAudioAutomatically);
+            window.removeEventListener('keydown', startAudioAutomatically);
+            window.removeEventListener('wheel', startAudioAutomatically);
+        }
+
+        window.addEventListener('touchstart', startAudioAutomatically, { passive: true });
+        window.addEventListener('pointerdown', startAudioAutomatically);
+        window.addEventListener('keydown', startAudioAutomatically);
+        window.addEventListener('wheel', startAudioAutomatically);
+
+        function toggleAudio() {
+            if (!audioCtx) initAudio();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const soundOff = document.getElementById('sound-off-icon');
+            const soundOn = document.getElementById('sound-on-icon');
+
+            if (isAudioPlaying) {
+                mainGainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.8);
+                soundOff.classList.remove('hidden');
+                soundOn.classList.add('hidden');
+            } else {
+                mainGainNode.gain.setTargetAtTime(0.20, audioCtx.currentTime, 0.8);
+                soundOff.classList.add('hidden');
+                soundOn.classList.remove('hidden');
+            }
+            isAudioPlaying = !isAudioPlaying;
+        }
+
+        document.getElementById('audio-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleAudio();
+        });
+
+        /* =====================================================================
+           CONFIGURACIÓN 3D Y WEBGL
+           ===================================================================== */
+        const canvas = document.getElementById('webgl-canvas');
+        const renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x030202, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const initialZ = window.innerWidth < 768 ? 22 : 16;
+        camera.position.set(0, 0, initialZ);
+
+        const composer = new THREE.EffectComposer(renderer);
+        const renderPass = new THREE.RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new THREE.UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.60,
+            0.40, 
+            0.35  
+        );
+        composer.addPass(bloomPass);
+
+        const ChromaticAberrationShader = {
+            uniforms: {
+                "tDiffuse": { value: null },
+                "amount": { value: 0.0018 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float amount;
+                varying vec2 vUv;
+                void main() {
+                    vec2 offset = amount * (vUv - 0.5);
+                    vec4 cr = texture2D(tDiffuse, vUv + offset);
+                    vec4 cga = texture2D(tDiffuse, vUv);
+                    vec4 cb = texture2D(tDiffuse, vUv - offset);
+                    gl_FragColor = vec4(cr.r, cga.g, cb.b, cga.a);
+                }
+            `
+        };
+        const chromPass = new THREE.ShaderPass(ChromaticAberrationShader);
+        composer.addPass(chromPass);
+
+        function createWoodShelfTexture() {
+            const cv = document.createElement('canvas');
+            cv.width = 1024;
+            cv.height = 1024;
+            const ctx = cv.getContext('2d');
+
+            ctx.fillStyle = '#180d05';
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            for (let i = 0; i < 2000; i++) {
+                ctx.fillStyle = `rgba(10, 5, 2, ${Math.random() * 0.12})`;
+                ctx.fillRect(Math.random() * 1024, 0, Math.random() * 2 + 1, 1024);
+            }
+
+            const rows = 8;
+            const rowH = 1024 / rows;
+            for (let r = 0; r < rows; r++) {
+                ctx.fillStyle = '#2b180a';
+                ctx.fillRect(0, (r + 1) * rowH - 18, 1024, 18);
+                ctx.fillStyle = '#c9964e';
+                ctx.fillRect(0, (r + 1) * rowH - 18, 1024, 2);
+
+                let x = 12;
+                while (x < 1000) {
+                    const bw = Math.floor(Math.random() * 26) + 12;
+                    const bh = Math.floor(Math.random() * (rowH - 40)) + 40;
+                    const colors = [
+                        '#452e1f', '#543729', '#807066', '#a8894f', '#917645', 
+                        '#61431e', '#2b1d16', '#1c120d', '#284228', '#1f3352'
+                    ];
+                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                    ctx.fillRect(x, (r + 1) * rowH - 18 - bh, bw, bh);
+
+                    if (Math.random() > 0.5) {
+                        ctx.fillStyle = '#c9964e';
+                        ctx.fillRect(x + bw / 2 - 1, (r + 1) * rowH - 18 - bh + 6, 2, bh - 12);
+                    }
+                    x += bw + 4;
+                }
+            }
+
+            return new THREE.CanvasTexture(cv);
+        }
+
+        const shelfTexture = createWoodShelfTexture();
+        shelfTexture.wrapS = THREE.RepeatWrapping;
+        shelfTexture.wrapT = THREE.RepeatWrapping;
+        shelfTexture.repeat.set(2, 2);
+
+        const tesseractGroup = new THREE.Group();
+
+        const beamGeo = new THREE.BoxGeometry(0.30, 0.30, 160);
+        const beamMat = new THREE.MeshStandardMaterial({
+            color: 0xc9964e,
+            roughness: 0.35,
+            metalness: 0.65,
+            emissive: 0x784e17,
+            emissiveIntensity: 0.22
+        });
+
+        const gridExtent = 3;
+        const spacing = 7.2;
+
+        for (let x = -gridExtent; x <= gridExtent; x++) {
+            for (let y = -gridExtent; y <= gridExtent; y++) {
+                const beamZ = new THREE.Mesh(beamGeo, beamMat);
+                beamZ.position.set(x * spacing, y * spacing, 0);
+                tesseractGroup.add(beamZ);
+
+                const beamX = new THREE.Mesh(beamGeo, beamMat);
+                beamX.rotation.y = Math.PI / 2;
+                beamX.position.set(0, y * spacing, x * spacing);
+                tesseractGroup.add(beamX);
+
+                const beamY = new THREE.Mesh(beamGeo, beamMat);
+                beamY.rotation.x = Math.PI / 2;
+                beamY.position.set(x * spacing, 0, y * spacing);
+                tesseractGroup.add(beamY);
+            }
+        }
+
+        const roomBoxGeo = new THREE.BoxGeometry(5.4, 5.4, 5.4);
+        const roomMaterials = Array(6).fill(null).map(() => 
+            new THREE.MeshStandardMaterial({
+                map: shelfTexture,
+                side: THREE.BackSide,
+                roughness: 0.5,
+                metalness: 0.1
+            })
+        );
+
+        const interactiveRooms = [];
+
+        for (let x = -2; x <= 2; x++) {
+            for (let y = -2; y <= 2; y++) {
+                for (let z = -2; z <= 2; z++) {
+                    if (x === 0 && y === 0 && z === 0) continue;
+
+                    const roomCube = new THREE.Mesh(roomBoxGeo, roomMaterials);
+                    roomCube.position.set(x * spacing, y * spacing, z * spacing);
+                    roomCube.userData = { isRoomCell: true, cellCoord: { x, y, z } };
+                    tesseractGroup.add(roomCube);
+                    interactiveRooms.push(roomCube);
+                }
+            }
+        }
+
+        const rayGeo = new THREE.CylinderGeometry(0.05, 3.2, 20, 16, 1, true);
+        const rayMat = new THREE.MeshBasicMaterial({
+            color: 0xffca28,
+            transparent: true,
+            opacity: 0.035,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        for (let i = 0; i < 12; i++) {
+            const ray = new THREE.Mesh(rayGeo, rayMat);
+            ray.position.set(
+                (Math.random() - 0.5) * 12,
+                (Math.random() - 0.5) * 12,
+                (Math.random() - 0.5) * 12
+            );
+            ray.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            tesseractGroup.add(ray);
+        }
+
+        scene.add(tesseractGroup);
+
+        const ambientLight = new THREE.AmbientLight(0xffecb3, 0.70);
+        scene.add(ambientLight);
+
+        const centerPointLight = new THREE.PointLight(0xffb300, 2.2, 60);
+        centerPointLight.position.set(0, 0, 0);
+        scene.add(centerPointLight);
+
+        // Sistema de pétalos
+        const petalCount = 1400;
+        const petalGeo = new THREE.BufferGeometry();
+        const petalPositions = new Float32Array(petalCount * 3);
+        const petalVelocities = [];
+
+        for (let i = 0; i < petalCount; i++) {
+            petalPositions[i * 3] = (Math.random() - 0.5) * 50;
+            petalPositions[i * 3 + 1] = (Math.random() - 0.5) * 50;
+            petalPositions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+
+            petalVelocities.push({
+                x: (Math.random() - 0.5) * 0.012,
+                y: (Math.random() - 0.5) * 0.012,
+                z: (Math.random() - 0.5) * 0.015
+            });
+        }
+
+        petalGeo.setAttribute('position', new THREE.BufferAttribute(petalPositions, 3));
+
+        function createPetalTexture() {
+            const cv = document.createElement('canvas');
+            cv.width = 64;
+            cv.height = 64;
+            const ctx = cv.getContext('2d');
+
+            ctx.beginPath();
+            ctx.moveTo(32, 4);
+            ctx.quadraticCurveTo(56, 28, 32, 60);
+            ctx.quadraticCurveTo(8, 28, 32, 4);
+            ctx.fillStyle = '#ffca28';
+            ctx.fill();
+
+            return new THREE.CanvasTexture(cv);
+        }
+
+        const petalMaterial = new THREE.PointsMaterial({
+            size: 0.65,
+            map: createPetalTexture(),
+            transparent: true,
+            opacity: 0.70,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const petalSystem = new THREE.Points(petalGeo, petalMaterial);
+        scene.add(petalSystem);
+
+        let targetCamX = 0;
+        let targetCamY = 0;
+        let currentCamX = 0;
+        let currentCamY = 0;
+        let targetCamZ = initialZ;
+        let currentCamZ = initialZ;
+
+        const memoryOverlay = document.getElementById('memory-overlay');
+        const memoryImage = document.getElementById('memory-image');
+        const warpOverlay = document.getElementById('warp-overlay');
+
+        /* =====================================================================
+           LÓGICA DE PROYECTAR RECUERDOS (SOLO IMÁGENES)
+           ===================================================================== */
+        function triggerMemoryMedia() {
+            const nextImgUrl = getNextImage();
+            memoryImage.src = nextImgUrl;
+            memoryOverlay.classList.add('active');
+        }
+
+        function dismissMemoryMedia() {
+            memoryOverlay.classList.remove('active');
+        }
+
+        memoryOverlay.addEventListener('click', dismissMemoryMedia);
+
+        /* =====================================================================
+           CONTROLES Y GESTOS TÁCTILES / MOUSE
+           ===================================================================== */
+        let isDragging = false;
+        let lastTouchPos = { x: 0, y: 0 };
+        let initialPinchDist = 0;
+        let touchStartPos = { x: 0, y: 0 };
+
+        window.addEventListener('wheel', (e) => {
+            const delta = e.deltaY * 0.015;
+            targetCamZ = Math.max(-45, Math.min(45, targetCamZ + delta));
+
+            warpOverlay.style.opacity = '1';
+            setTimeout(() => { warpOverlay.style.opacity = '0'; }, 300);
+        }, { passive: true });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) {
+                const normX = (e.clientX / window.innerWidth) * 2 - 1;
+                const normY = -(e.clientY / window.innerHeight) * 2 + 1;
+                targetCamX = normX * 8;
+                targetCamY = normY * 6;
+            }
+        });
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.closest('button') || memoryOverlay.classList.contains('active')) return;
+            isDragging = true;
+            lastTouchPos = { x: e.clientX, y: e.clientY };
+            touchStartPos = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                const distMoved = Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y);
+                if (distMoved < 5) {
+                    handleCellSelection(e.clientX, e.clientY, e.target);
+                }
+            }
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            if (e.target.closest('button') || memoryOverlay.classList.contains('active')) return;
+
+            if (e.touches.length === 1) {
+                isDragging = true;
+                lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                initialPinchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isDragging) {
+                const deltaX = (e.touches[0].clientX - lastTouchPos.x) * 0.035;
+                const deltaY = (e.touches[0].clientY - lastTouchPos.y) * 0.035;
+
+                targetCamX -= deltaX;
+                targetCamY += deltaY;
+
+                lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.touches.length === 2) {
+                const currentDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+
+                if (initialPinchDist > 0) {
+                    const pinchFactor = (initialPinchDist - currentDist) * 0.06;
+                    targetCamZ = Math.max(-45, Math.min(45, targetCamZ + pinchFactor));
+                    
+                    warpOverlay.style.opacity = '0.5';
+                    setTimeout(() => { warpOverlay.style.opacity = '0'; }, 200);
+                }
+                initialPinchDist = currentDist;
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            if (isDragging && e.changedTouches.length > 0) {
+                isDragging = false;
+                const endTouch = e.changedTouches[0];
+                const distMoved = Math.hypot(endTouch.clientX - touchStartPos.x, endTouch.clientY - touchStartPos.y);
+                
+                if (distMoved < 10) {
+                    handleCellSelection(endTouch.clientX, endTouch.clientY, e.target);
+                }
+            }
+            initialPinchDist = 0;
+        });
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function handleCellSelection(clientX, clientY, target) {
+            if (target.closest('button')) return;
+
+            if (memoryOverlay.classList.contains('active')) {
+                dismissMemoryMedia();
+                return;
+            }
+
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactiveRooms);
+
+            if (intersects.length > 0) {
+                const hitObj = intersects[0].object;
+                const hitPos = hitObj.position;
+
+                targetCamX = hitPos.x * 0.8;
+                targetCamY = hitPos.y * 0.8;
+                targetCamZ = hitPos.z + 6.0;
+
+                warpOverlay.style.opacity = '1';
+                chromPass.uniforms.amount.value = 0.008;
+
+                setTimeout(() => {
+                    warpOverlay.style.opacity = '0';
+                    chromPass.uniforms.amount.value = 0.0018;
+                    triggerMemoryMedia();
+                }, 400);
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            currentCamX += (targetCamX - currentCamX) * 0.05;
+            currentCamY += (targetCamY - currentCamY) * 0.05;
+            currentCamZ += (targetCamZ - currentCamZ) * 0.06;
+
+            camera.position.x = currentCamX;
+            camera.position.y = currentCamY;
+            camera.position.z = currentCamZ;
+            camera.lookAt(0, 0, currentCamZ - 16);
+
+            tesseractGroup.rotation.y = Math.sin(elapsedTime * 0.03) * 0.15;
+
+            const petalPosAttr = petalSystem.geometry.attributes.position;
+            for (let i = 0; i < petalCount; i++) {
+                const vel = petalVelocities[i];
+
+                let x = petalPosAttr.getX(i) + vel.x;
+                let y = petalPosAttr.getY(i) + vel.y;
+                let z = petalPosAttr.getZ(i) + vel.z;
+
+                if (Math.abs(x) > 25) x = -x;
+                if (Math.abs(y) > 25) y = -y;
+                if (Math.abs(z - currentCamZ) > 30) z = currentCamZ + (Math.random() - 0.5) * 20;
+
+                petalPosAttr.setXYZ(i, x, y, z);
+            }
+            petalPosAttr.needsUpdate = true;
+
+            composer.render();
+        }
+
+        animate();
+    </script>
+</body>
+</html>
